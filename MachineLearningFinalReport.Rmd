@@ -1,0 +1,756 @@
+---
+title: "Final Report"
+author: "Group 2 (Ronghua Ni, Arushi Shah, Clarence Chen, Pranav Ravichandran)"
+output: pdf_document
+---
+
+# Part 1: Executive Summary for Regression Question
+
+**(a)**
+
+The regression question of interest is how does age, work experience, education level, credit to debt ratio, and other debts of the customer change the yearly income. 
+
+**(b)**
+
+The question is significant because it allows for prediction of a customer’s income using their bank and financial data, which is available to a lot of banks. This prediction is significant because it allows banks to be able to use that to in turn evaluate the risk they are taking with a customer of whether they are going to default or not, allowing banks to make more informed decisions on loans. So, using regression methods to predict income levels, banks are the relevant stakeholders who can assess the risk on a specific customer.
+
+**(c)**
+
+The analyses carried out help answer this question of interest because they include various methods to see if we can predict the yearly income using the other factors and with what accuracy we can predict. Using the different models is useful because we can compare the results of the different models and see what model yields the best prediction accuracy. We first dove into the question of interest itself to derive that regression would be useful by seeing what variables we have. We then built different regression models to get an accurate prediction for yearly income. It included an exploratory data analysis to show the variables relationships with each other and yearly income to assure that the variables are proper predictors of yearly income. Then, there were shrinkage methods, regression trees, and random forests models created to predict the yearly income. The various models had different benefits such as being more specific versus reducing overfitting, but in the end, the best model based on error rate was the random forests model.
+
+**(d)**
+
+Using these analyses, I would suggest banks to really pay attention to a customer’s other debts and years of experience working to get a scope of a customer’s income and how it may reflect on their likelihood of defaulting.
+
+# Part 2: Data and Variable Description for Regression
+
+**(a)**
+
+The dataset is about various financial metrics and personal information and characteristics for customers of an unnamed leading bank. For each customer, work experience, age, yearly income, credit to debt ratio, other debts, and education level are included in the data set.
+
+**(b)**
+
+We obtained our dataset from Kaggle. Kaggle describes it as a dataset with a variety of variables on customers of an unnamed leading bank. They most likely got the data from the bank directly.
+
+**(c)**
+
+Predictor Variables:
+
+* Work Experience (employ): Year of work experience that the customer has had.
+
+* Age (age): Age in years of the customer.
+
+* Credit to debt ratio (creddebt): Measure of how much of their available credit a customer is using. It is calculated by dividing total credit balance by credit limit.
+
+* Other debts (othdebt): Total amount of other debts owed by the customer divided by 1,000
+
+* Education Level (ed): The level of education of the customer. 1 means high school. 2 means undergraduate. 3 means master. 4 means phd. 5 means higher education. 
+
+Response variable:
+
+* Income (income): Yearly income of the customer divided by 10,000.
+
+
+# Part 3: Regression Question
+
+# 3.1 Exploratory Data Analysis for Regression Question
+
+```{r setup, include=FALSE}
+library(ggplot2)
+set.seed(111)
+data<-as.data.frame(read.csv("/Users/chenzian/Desktop/UVA/STAT 4630/Project/bankloans.csv"))
+```
+
+a) Data Cleaning and Processing:
+
+Handling Missing Data:
+
+We removed rows with missing values in the 'default' variable since it lacked meaningful information.
+
+Excluding Variables:
+
+We decided not to include the 'debt to income ratio' variable due to its direct correlation with the target variable (yearly income). This ratio primarily measures an individual's debt relative to their income, and its inclusion could inadvertently leak information about the target variable. Additionally, the 'address' variable, represented numerically without specific regions, was deemed irrelevant as a predictor for yearly income and was consequently excluded from the analysis.
+
+Converting Variables:
+
+We converted the variables 'ed' (education level) and 'default' from numeric numbers to factors. Education levels were coded as follows: 1 for high school, 2 for undergraduate, 3 for master, 4 for Ph.D., and 5 for higher education, with code 5 serving as the reference category. The 'default' variable was coded as 0 for non-default and 1 for default.
+
+Histograms for Quantitative Variables:
+
+Histograms were created for three quantitative variables: 'income,' 'creddebt' (credit-to-debt ratio), and 'othdebt.' The purpose of these histograms was to assess the normality of the data distribution. Skewed data distributions can negatively impact the performance of regression models. As a result, we transformed the 'income', 'creddebt', and 'othdebt' variables by taking the natural logarithm.
+
+These steps were undertaken to enhance data quality and its relevance in the context of the analysis. The decision to exclude specific variables and conduct histogram analysis aimed to optimize the data for regression modeling.
+
+```{r,echo=FALSE, comment=NA,warning=FALSE,message =FALSE}
+df <- na.omit(data)
+df <- df[,-c(4,6)]
+df$ed<-factor(df$ed)
+df$default<-factor(df$default)
+levels(df$ed) <- c("high school", "undergraduate", "master", "ph.d", "higher education")
+contrasts(df$ed) <- contr.sum(5)  
+```
+
+
+```{r,echo=FALSE, comment=NA,warning=FALSE,message =FALSE}
+sample.data<-sample.int(nrow(df), floor(.50*nrow(df)), replace = F)
+train<-df[sample.data, ]
+test<-df[-sample.data, ]
+```
+
+
+b) Relevant  summaries
+
+## Variable Summaries:
+
+```{r, echo=FALSE, comment=NA,warning=FALSE,message =FALSE}
+summary_statistics <- train[,1:6]
+summary(summary_statistics)
+```
+These summaries cover key statistics for each variable, excluding 'default' due to its categorical nature. They provide minimums, maximums, quartiles, means, and medians, aiding in understanding the range and differences between variables. This helps standardize and accurately compare features before model building.
+
+## Correlation Matrix:
+
+```{r, echo=FALSE, comment=NA,warning=FALSE,message =FALSE}
+df2 <- data[,-c(4,6,9)]
+round(cor(df2[,1:6]), 3)
+
+```
+The correlation matrix shows that income has a strong positive relationship with employment, credit to debt ratio, and the other debts. Income has a slightly weak relationship with age and education level.
+
+```{r,echo=FALSE, comment=NA,warning=FALSE,message =FALSE}
+moments::skewness(train$income)
+moments::skewness(train$creddebt)
+moments::skewness(train$othdebt)
+```
+The skewness values for income, creddebt and othdebt are 2.858047, 3.726225, and 2.365104 respectively. 
+
+
+```{r, echo=FALSE, comment=NA,warning=FALSE,message =FALSE,fig.height=3, fig.width=4}
+# Log-transform the "income" variable
+log_income <- log(train$income)
+hist(log_income, xlab = "Log(income) (in thousands $)", main = "Distribution of Yearly Incomes", breaks = 12, col = 'yellow')
+mean_log_income <- mean(log_income, na.rm = TRUE)
+abline(v = mean_log_income, col = 'limegreen', lwd = 4)
+text(x = mean_log_income + 0.7 , y = 35, labels = paste("Mean =", round(mean_log_income, 2)), col = 'limegreen')
+
+```
+
+The average yearly income is \$36,234, with the highest frequency occurring is between approximately \$24,500 and $30,000.
+
+
+```{r, echo=FALSE, comment=NA,warning=FALSE,message =FALSE,fig.height=2, fig.width=4}
+par(mar = c(5, 5, 3, 1), cex=.4)
+boxplot(log_income ~ train$ed,
+        main = "Boxplot of Income by Education Level",
+        xlab = "Education Level",
+        ylab = "Log(income)",
+        col = c("lightgray", "lightblue", "yellow2","#C1FFC1","thistle1"),
+        border = "black",
+        notch = FALSE)
+
+```
+
+The average annual income for high school, undergraduate, master, Ph.D,and higher education is approximately \$30,000, \$37,000, \$49,000, \$33,000, and $99,000,respectively. We can see  the average income for Ph.D. holders seems lower compared to master and undergraduate. (averages might not fully capture individual experiences and that some Ph.D. holders do achieve high incomes)
+
+```{r, echo=FALSE, comment=NA,warning=FALSE,message =FALSE,fig.height=3, fig.width=5}
+boxplot(log_income ~ age, data = train,
+        xlab = "Age",
+        ylab = "Log(income)",
+        col = "lightyellow",
+        border = "black")
+```
+
+There is a slightly strong positive relationship between income and age.
+
+
+```{r, echo=FALSE, comment=NA,warning=FALSE,message =FALSE,fig.height=2, fig.width=5}
+Log_creddebt <- log(train$creddebt)
+ggplot(train, aes(x = log_income, y = Log_creddebt , color = log_income)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "yellow") +
+  scale_color_gradient(low = "yellow", high = "red") + 
+  labs(x = "Log(income)", y = "Log(creddebt)", title = "Income vs. Credit to Debt Ratio")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+```{r, echo=FALSE, comment=NA,warning=FALSE,message =FALSE,fig.height=2, fig.width=5}
+Log_othdebt <- log(train$othdebt)
+
+ggplot(train, aes(x = log_income, y = Log_othdebt, color = log_income)) +
+  geom_point() +
+  scale_color_gradient(low = "yellow", high = "brown") +
+  geom_smooth(method = "lm", se = FALSE, color = "yellow") +
+  labs(x = "Log(income)", y = "Log(othdebt)", title = "Income vs. Other Debt") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+```
+
+There is a moderately strong positive relationship between income, credit-to-debt ratio, and other forms of debt. The data shows that individuals with higher incomes tend to have a more favorable credit-to-debt ratio and higher levels of other debts. This positive correlation implies that as income increases, both the credit-to-debt ratio and other forms of debt tend to rise.
+
+
+```{r, echo=FALSE, comment=NA,warning=FALSE,message =FALSE,fig.height=2, fig.width=4}
+ggplot(train, aes(x = log_income, fill = default)) +
+  geom_bar(position = "dodge", width = 0.7) +
+  scale_fill_manual(values = c("#F0E442", "lightgreen")) +  
+  labs(x = "Log(income)", y = "Count", title = "Bar Chart: Income vs. Default")
+
+```
+
+This bar chart illustrates that individuals with an income below \$13,000 tend to default, while those with an income higher than \$200,000 are less likely to default. The proportions for default and non-default are 0.26 and 0.74, respectively.The observed data does not provide sufficient evidence to establish a statistically significant relationship between income and default. Further analysis may be required to draw more robust conclusions in this regard.
+
+
+```{r, echo=FALSE, comment=NA,warning=FALSE,message =FALSE,fig.height=2, fig.width=6}
+
+ed_colors <- c("lightblue", "green", "orange", "yellow", "red")
+
+ggplot(train, aes(x = employ, y = log_income, color = ed)) +
+  geom_point() +
+  geom_smooth(method = lm, se = FALSE) +
+  geom_smooth(method = lm,data = train,se=F,color="purple")+
+  scale_color_manual(values = ed_colors) +  
+  labs(x = "Work Experience", y = "Log Income")  
+
+```
+
+The purple line represents the regression line.  It reveals a strong positive link between work experience and income. It also shows that, on average, Ph.D. holders tend to have higher incomes when their work experience is factored in. 
+
+```{r,echo=FALSE, comment=NA,warning=FALSE,message =FALSE,fig.height=3, fig.width=5}
+pairs(df2, lower.panel = NULL)
+```
+
+The correlation matrix reveals that pairs of predictors involving "work experience," "other debt," and "credit-to-debt ratio" exhibit high correlations. In contrast, pairs involving education and age show weaker correlations. Hence, there seems to be a degree of multicollinearity among certain predictors.
+
+c) These graphical summaries were explored to gain an initial understanding of the data, identify trends and relationships, assess variable relevance, and prepare for subsequent regression analysis aimed at answering research question about the factors affecting annual income.
+
+
+d) In our analysis of a subset comprising 350 individuals, we utilized graphical summaries to gain insights into the determinants of income. The findings align with established knowledge within the realm of credit risk assessment. Notably, individuals with advanced degrees, extensive work experience, and a higher credit-to-debt ratio generally exhibit elevated yearly incomes. Additionally, age plays a role in income dynamics. While age alone doesn't follow a straightforward trend of 'the older you get, the higher your annual income,' our analysis reveals a nuanced relationship. Age interacts with other factors, such as education and work experience, influencing income levels. Conversely, individuals with higher yearly incomes often carry increased levels of other forms of debt, a trend consistent with economic principles, where higher-income individuals may leverage their financial position for additional investments or expenditures. These insights emphasize the critical role of considering such factors, including age, in the evaluation of creditworthiness and lending decisions, shedding light on potential risk factors associated with loan defaults."
+
+# 3.2 Shrinkage Methods
+
+**(a)**
+
+The predictors that are included are: 
+
+* Work experience (employ): years of work experience that the customer has had
+
+* Age: age in years of the customer
+
+* Log of credit to debt ratio (logcreddebt): log measure of how much of their available credit a customer is using. It is calculated by taking the log of dividing total credit balance by credit limit
+
+* Log of other debts (logothdebt): log of total amount of other debts owed by the customer divided by 1,000
+
+* Education Level (ed): the level of education of the customer. 1 means high school. 2 means undergraduate. 3 means master. 4 means phd. 5 means higher education. Note that this variable is converted into dummy variables, with each dummy variable representing a level of the original categorical variable.
+
+The predictors that are excluded are: 
+
+* Address (address): address by itself does not correlate directly with income unless it's categorized in a way that reflects socio-economic divisions or regions. In this dataset, the address is simply a number which does not represent any region, so an address would not be a meaningful predictor for yearly income.
+
+* Debt to Income Ratio (debtinc): Debt to Income Ratio is removed due to its direct correlation with the variable "yearly income". The debt to income ratio is essentially a measure of how much debt someone has in comparison to their income. Since we are trying to predict income, this ratio might inadvertently leak the target information.
+
+**(b)**
+
+```{r, echo=FALSE,warning=FALSE,message =FALSE}
+loan_data <- read.csv("/Users/chenzian/Desktop/UVA/STAT 4630/Project/bankloans.csv")
+loan_data$ed <- as.factor(loan_data$ed)
+loan_data$logincome <- log(loan_data$income)
+loan_data$logcreddebt <- log(loan_data$creddebt)
+loan_data$logothdebt <- log(loan_data$othdebt)
+```
+
+To choose the value of the threshold used in the glmnet() function, we firstly try the value $10^{-7}$:
+
+```{r, echo=FALSE,warning=FALSE,message =FALSE}
+library(glmnet)
+x<-model.matrix(logincome ~ employ + age + logcreddebt + logothdebt +
+                  ed, data = loan_data)[, -1]
+y<-loan_data$logincome
+ridge.r<-glmnet::glmnet(x,y,alpha=0, lambda=0)
+result<-lm(logincome ~ employ + age + creddebt + othdebt + ed, data = loan_data)
+cbind(coefficients(result), coefficients(ridge.r))
+```
+
+The estimated coefficients from ridge regression are slightly different from the estimated coefficients from OLS, so the threshold may need to be smaller, especially if multicollinearity is present. We can try setting the threshold to be $10^{-23}$:
+
+```{r, echo=FALSE,warning=FALSE,message =FALSE}
+ridge.r<-glmnet::glmnet(x,y,alpha=0, lambda=0, thresh = 1e-23)
+cbind(coefficients(result), coefficients(ridge.r))
+```
+
+To address the previous comments, there is a comment on "you made the threshold smaller. But looks like the coefficients are still not the same. Did you try even smaller threshold?". We can try setting the threshold to be $10^{-100}$:
+
+```{r, echo=FALSE,warning=FALSE,message =FALSE}
+ridge.r<-glmnet::glmnet(x,y,alpha=0, lambda=0, thresh = 1e-100)
+cbind(coefficients(result), coefficients(ridge.r))
+```
+We can see that the estimated coefficients from ridge regression are still slightly different from the estimated coefficients from OLS after we change the threshold from $10^{-23}$ to $10^{-100}$, and surprisingly, the estimated coefficients are the same for the threshold of $10^{-23}$ and $10^{-100}$. This indicates that beyond a certain point, further reducing the lambda value does not significantly change the coefficients. This is because the impact of the penalty term has already become so minimal at $10^{-23}$ that going even lower to $10^{-100}$ does not materially change the outcome. Thus, we will still choose the value of $10^{-23}$ to be the threshold. 
+
+# 3.3 Regression Trees
+
+**(a)**
+
+Recursive binary splitting is used to build the regression tree because it take into account the various feature interactions and they also are very easily interpreted due to the layout of a tree. However, pruning is used over the recursive binary splitting tree to assure that the tree avoids overfitting by making sure that features are not overused in the tree. From both trees, the pruned tree results in a lower error rate, so that model is used to present the tree.
+
+**(b)**
+
+```{r, echo=FALSE,warning=FALSE,message =FALSE}
+library(dplyr)
+library(tree)
+library(glmnet)
+loan_data <- read.csv("/Users/chenzian/Desktop/UVA/STAT 4630/Project/bankloans.csv")
+loan_data$ed <- as.factor(loan_data$ed)
+loans <- loan_data %>%
+  select('income','age', 'ed', 'employ','creddebt','othdebt')
+loans<-na.omit(loans)
+loans$logincome <- log(loans$income)
+loans$logcreddebt <- log(loans$creddebt)
+loans$logothdebt <- log(loans$othdebt)
+
+set.seed(4630)
+sample.data<-sample.int(nrow(loans), floor(.50*nrow(loans)), replace = F)
+train<-loans[sample.data, ]
+test<-loans[-sample.data, ]
+# for the predictions in testing
+loans.test<-test[,"logincome"]
+# recursive binary splitting tree
+tree.result <- tree(logincome ~ age + ed + employ + logcreddebt + logothdebt, data = train)
+cv.loans <- cv.tree(tree.result, K = 10)
+
+##tree with 10 nodes is chosen with pruning
+trees.num<-cv.loans$size[which.min(cv.loans$dev)]
+
+##refit with all data points, with 16 nodes
+tree.full<-tree::tree(logincome ~ age + ed + employ + logcreddebt + logothdebt, data = loans)
+prune.full<-tree::prune.tree(tree.full, best=trees.num)
+
+summary(prune.full)
+```
+
+**(c)**
+
+The pruned tree has 11 terminal nodes.
+
+**(d)**
+
+```{r, echo = FALSE,warning=FALSE,message =FALSE}
+plot(prune.full)
+text(prune.full, cex=0.45)
+yhat.prune <- predict(prune.full, newdata = test)
+pruned_mse <- mean((loans.test - yhat.prune)^2)
+```
+
+**(e)**
+
+```{r, echo=FALSE,warning=FALSE,message =FALSE}
+library(randomForest)
+set.seed(4630)
+rf.loans<-randomForest(logincome~age + ed + employ + logcreddebt + logothdebt, data=train, mtry=4,importance=TRUE)
+
+round(importance(rf.loans),2)
+varImpPlot(rf.loans)
+
+yhat.rf<-predict(rf.loans, newdata=test)
+mse.rf<-mean((loans.test-yhat.rf)^2)
+```
+
+# 3.4 Summary of Findings
+
+**(a)**
+
+```{r, echo=FALSE,warning=FALSE,message =FALSE}
+
+library(glmnet)
+lr <- lm(logincome~age + ed + employ + logcreddebt + logothdebt, data=train)
+
+predictions <- predict(lr, data = test)
+residuals <- loans.test - predictions
+
+mse_linear <- mean(residuals^2)
+
+comp <- data.frame(Model = c("Linear Regression", "Ridge Regression", "Lasso Regression", "Pruned Regression Tree", "Random Forests"), Test_MSE = c(mse_linear,0.1072249, 0.1066406, pruned_mse,mse.rf))
+
+comp
+
+```
+
+**(b)**
+
+The values of the test MSE's are relatively decent, except for linear regression. The random forests MSE is the best one at a 0.0868 because it shows that the mean of the squared errors between the predictions and actual values of the income (log transformed) is pretty low because it is only 0.08. Even for the other models, the shrinkage methods yield a 0.10 MSE and the pruned regression tree yields a 0.12 MSE which is relatively good because it could go all the way up to 1 so it is considered small. All in all, excluding linear regression, the models only have about a 10% mean squared error rate, which is good.
+
+**(c)**
+
+The findings from these models answer the regression question because they are able to predict the yearly income of customers based on the given variables with a relatively low error rate. Especially, as the table shows, the random forests model was very successful in predicting the yearly income based on the test set mean squared error, which shows that if banks were to use the data of the other debts, years of experience, credit to debt ratio, education level, and age of customers, they would be able to get a relatively decent estimate on a customer's income level if they don't disclose it. This could really help banks see if they trust a customer enough to loan them money. If they make a good amount of money yearly, it also is indicative of a customer's ability to be able to pay the bank back the money. Obviously, this cannot speak for everyone, but overall using these models, we can see that the income prediction is pretty reliable, depending on the level of risk banks are willing to take.
+
+**(d)**
+
+The random forests method was the best in answering the question of interest because its predicted value gives the lowest error rate on average so that is the model that banks would be recommended to use to minimize error. However, the pruned tree is a pretty decent model to use for the question because the purpose of this analysis is to see if a customer would default or not and the tree output gives a good look at exactly what factors and cutoffs for those factors(variables) are significant to output a certain prediction income value for the customer. This model was the best out of all the models that have been used and attempted to predict the income, so perhaps increasing the data size or the variables could improve the random forests model, or finding a better fitting dimensional model could address the question better by accounting for very specific predictor values
+
+# 3.5 Address Previous Comments 
+
+We have successfully addressed the comments from previous milestones regarding the regression question.
+
+# Part 4: Executive Summary for Classification Question
+
+**(a)**
+
+The purpose of this analysis is to determine whether certain variables can provide relevant information about whether a customer has or has not defaulted in the past. In particular, the question of interest we want to answer is as follows: Can we utilize different borrower characteristics– specifically credit history, debt history, age, income, and work experience–to predict whether a customer has defaulted in the past?
+
+**(b)**
+
+Relevant stakeholders include: Lending institutions, borrowers, and financial regulators
+
+Identifying which customers are more likely to default is important for a number of reasons. By identifying high-risk borrowers, lenders can reduce their risk of loan defaults. This can lead to lower interest rates and fees for borrowers, as well as a wider range of loan products and services. It can also help lenders by allowing them to be more informed in their lending practices. This can help to ensure that borrowers are not overextended and that they are able to repay their loans. In addition to helping make better practices, lenders can use this information to make tailored loan products and services that satisfy the needs of specific borrower segments. This information can also be used to help financial regulators develop sounder financial policies. For example, regulators may use this information to set capital requirements for banks or to develop new regulations to protect consumers.
+
+**(c)**
+
+The top three variables that were useful in predicting whether a customer has defaulted in the past are years of employment, credit to debt ratio, and other debts held by that customer.
+
+**(d)**
+
+In order to predict a customer's likelihood of defaulting, one should mainly look at that customer's years of employment, credit to debt ratio, and other debts. Specifically, more years of employment, less credit to debt ratio, and low other debts will indicate a customer as not likely to default.
+
+# Part 5: Data and Variable Description for Classification
+
+Predictors:
+
+* Work Experience (employ): Year of work experience that the customer has had.
+  
+* Age (age): Age in years of the customer.
+  
+* Income (income): Yearly income of the customer divided by 10,000.
+
+* Credit to debt ratio (creddebt):  Measure of how much of their available credit a customer is using. It is calculated by dividing total credit balance by credit limit.
+
+* Other debts (othdebt): Total amount of other debts owed by the customer divided by 1,000
+
+* Education Level (ed): the level of education of the customer. 1 means high school. 2 means undergraduate. 3 means master. 4 means phd. 5 means higher education. Note that this variable is converted into dummy variables, with each dummy variable representing a level of the original categorical variable.
+
+Response Variable:
+
+* Defaulted In Past (default): Is a 0 if the customer has not defaulted in the past and 1 if the customer has defaulted in the past.
+
+# Part 6: Classification Question
+
+# 6.1 Exploratory Data Analysis for Classification 
+
+a) Data Cleaning and Processing:
+
+Handling Missing Data: We removed rows with missing values in the 'default' variable as they lacked meaningful information. 
+
+Excluding Variables: The 'debt-to-income ratio' variable was omitted due to potential multicollinearity with income or credit-to-debt ratio. Additionally, education level, being a categorical predictor unsuitable for discriminant analysis, was excluded. The 'address' variable, lacking specificity regarding regions, was considered irrelevant as a predictor for default and was  consequently removed from the analysis.
+
+Converting Variables: Numeric-to-factor conversion was applied to the 'default' variable, coded as 0 for non-default and 1 for default. 
+
+Histograms for Quantitative Variables: Histograms were generated for three quantitative variables: 'income', 'creddebt', and 'othdebt' These aimed to assess data distribution normality. Skewed distributions can impact regression models negatively. To address this, we transformed 'income,' 'creddebt,' and 'othdebt' variables using the natural logarithm.
+
+```{r, echo=FALSE, comment=NA,warning=FALSE,message =FALSE}
+df3 <- na.omit(data)
+df3 <- df3[,-c(4,6)]
+df3$default<-factor(df3$default)
+df3$ed <- as.factor(df3$ed)
+levels(df3$default) <- c("no","yes")
+
+```
+
+
+```{r,echo=FALSE, comment=NA,warning=FALSE,message =FALSE}
+contrasts(df3$default)
+prop.table(table(df3$default))
+```
+
+```{r, echo=FALSE, comment=NA,warning=FALSE,message =FALSE}
+sample.data<-sample.int(nrow(df3), floor(.50*nrow(df3)), replace = F)
+train<-df3[sample.data, ]
+test<-df3[-sample.data, ]
+
+```
+
+```{r,echo=FALSE, comment=NA,warning=FALSE,message =FALSE}
+log.income <- log(train$income)
+log.othdebt <- log(train$othdebt)
+log.creddebt <- log(train$creddebt)
+```
+
+
+```{r, echo=FALSE, comment=NA,warning=FALSE,message =FALSE,fig.height=3, fig.width=6,out.width="85%"}
+plot =ggplot(train,aes(x=log.creddebt,y=log.income,color=default))+
+  geom_point(shape=19)+
+  scale_color_manual("default",values = c("no"="yellow","yes"="limegreen"))
+plot+labs(title = "Plot of Credit to Debt Ratio and Income")
+
+```
+
+We created a scatter plot that compares annual income and monthly credit card to debt ratio for a subset of 350 individuals. Defaulted individuals are represented in green, while non-defaulted individuals are in yellow. The plot shows that those who defaulted generally had lower credit to debt ratios and lower incomes compared to those with higher incomes who did not default.
+
+```{r,echo=FALSE, comment=NA,warning=FALSE,message =FALSE,fig.height=3, fig.width=5, out.width="85%"}
+boxplot(log.creddebt~default,data=train,
+        main = "Boxplot of Credit to Debt Ratio and Default",
+        xlab = "Default",
+        ylab = "Log(creddebt)",
+        col = c( "yellow2","lightblue", border = "black", 
+                 notch = FALSE))
+```
+
+The plot indicates that individuals who have defaulted on their financial obligations typically exhibit a higher average credit-to-debt ratio when compared to those who have not defaulted. This suggests a correlation between a lower credit-to-debt ratio and a higher likelihood of defaulting on financial commitments.
+
+
+```{r,out.width="85%",echo=FALSE, comment=NA,warning=FALSE,fig.height=3, fig.width=5,message =FALSE}
+boxplot(log.income~default,data=train,
+        main = "Boxplot of Income and Default",
+        xlab = "Default",
+        ylab = "Log(income)",
+        col = c( "#9999CC","gold", border = "black", 
+                 notch = FALSE))
+```
+
+The boxplot reveals that individuals who have defaulted on their financial obligations generally exhibit lower average incomes in comparison to those who have not defaulted. Furthermore, it is noteworthy that there is a higher occurrence of outliers within the non-defaulting individuals' group.
+
+```{r,out.width="85%",echo=FALSE, comment=NA,warning=FALSE,fig.height=3, fig.width=5,message =FALSE}
+boxplot(employ~default,data=train,
+        main = "Boxplot of employ and Default",
+        xlab = "Default",
+        ylab = "Employ",
+        col = c( "lightyellow","thistle1", border = "black", 
+                 notch = FALSE))
+```
+
+The plot suggests that, on average, individuals who have defaulted tend to have less work experience than those who did not default.
+
+
+```{r,out.width="85%",fig.height=3, fig.width=5,echo=FALSE, comment=NA,warning=FALSE,message =FALSE}
+boxplot(log.othdebt~default,data=train,
+        main = "Boxplot of othdebt and Default",
+        xlab = "Default",
+        ylab = "Log(othdebt)",
+        col = c( "yellow","#6B8E23", border = "black", 
+                 notch = FALSE))
+```
+
+The plot illustrates that, on average, individuals who defaulted have higher levels of other debt compared to those with less other debt.
+
+```{r,out.width="85%",fig.height=3, fig.width=5,echo=FALSE, comment=NA,warning=FALSE,message =FALSE}
+boxplot(age~default,data=train,
+        main = "Boxplot of Age and Default",
+        xlab = "Default",
+        ylab = "Age",
+        col = c( "darkgreen","orange", border = "black", 
+                 notch = FALSE))
+```
+
+The boxplot illustrates that, on average, individuals who have defaulted are younger in age compared to older individuals.
+
+Summary:
+
+In our analysis, we examined a subset of 350 individuals and created several graphical summaries to gain insights into factors associated with loan defaults. The findings are consistent with prior knowledge in the field of credit risk assessment. Individuals who defaulted generally exhibited higher credit card to debt ratios, lower incomes, less work experience, higher levels of other debt,and younger in age. These insights reinforce the importance of considering these factors in credit assessment and lending decisions, as they highlight potential risk factors associated with loan defaults.
+
+# 6.2 Logistic Regression Model
+
+**(a)**
+
+The predictors that are included are: 
+
+* Work experience (employ): years of work experience that the customer has had
+
+* Age (age): age in years of the customer
+
+* Credit to debt ratio (creddebt): measure of how much of their available credit a customer is using. It is calculated by taking the log of dividing total credit balance by credit limit
+
+* Other debts (othdebt): total amount of other debts owed by the customer divided by 1,000
+
+* Income (income): Yearly income of the customer divided by 10,000.
+
+* Education Level (ed): the level of education of the customer. 1 means high school. 2 means undergraduate. 3 means master. 4 means phd. 5 means higher education. Note that this variable is converted into dummy variables, with each dummy variable representing a level of the original categorical variable.
+
+The predictors that are excluded are: 
+
+* Address (address): address by itself does not correlate directly with income unless it's categorized in a way that reflects socio-economic divisions or regions. In this dataset, the address is simply a number which does not represent any region, so an address would not be a meaningful predictor for yearly income.
+
+* Debt to Income Ratio (debtinc): Debt to Income Ratio is removed due to its direct correlation with the variable "yearly income". The debt to income ratio is essentially a measure of how much debt someone has in comparison to their income. Since we are trying to predict income, this ratio might inadvertently leak the target information.
+
+**(b)**
+```{r, echo=FALSE}
+#Logistic Regression
+logistic_regression <- glm(default ~ age + employ + income + creddebt + othdebt + ed, family=binomial, data=train)
+summary(logistic_regression)
+```
+
+
+# 6.3 Classification Trees
+
+**(a)**
+
+We chose to present the recursive binary splitting tree over the pruned tree because it had a false negative rate that was around ~0.1 lower than the pruned tree. This, however, came at a tradeoff as the RBS tree had ~0.1 higher false positive rate but, for our purposes, maintaining a lower false negative rate is more important than maintaining a lower false positive rate as predicting a customer as likely to not default when they are likely to default is more damaging for lending institutions.
+
+**(b)**
+
+```{r, warnings=FALSE, messages=FALSE, echo=FALSE}
+library(readr)
+library(tree)
+library(randomForest)
+Data <- read.csv("/Users/chenzian/Desktop/UVA/STAT 4630/Project/bankloans.csv", header = T)
+# Data<-read.csv("bankloans.csv", header=T)
+Data <- na.omit(Data[,-c(2,4,6)])
+Data$default<- factor(Data$default)
+
+#Split data
+set.seed(4630)
+sample.data<-sample.int(nrow(Data), floor(.50*nrow(Data)), replace = F)
+train<-Data[sample.data, ]
+test<-Data[-sample.data, ]
+y.test<-test$default
+
+tree.class.train<-tree(default~., data=train)
+summary(tree.class.train)
+
+```
+
+**(c)**
+
+The tree has 26 terminal nodes.
+
+**(d)**
+
+```{r, echo=FALSE, warnings = FALSE}
+plot(tree.class.train)
+text(tree.class.train, cex=0.4, pretty=0)
+```
+
+**(e)**
+
+```{r, echo=FALSE, warnings = FALSE}
+set.seed(4630)
+rf.class<-randomForest(default~., data=train, mtry=2, importance=TRUE)
+varImpPlot(rf.class)
+```
+
+# 6.4 Summary of Findings
+
+**(a)**
+
+**Logistic Regression Matrix**
+
+```{r, echo=FALSE, warning = FALSE}
+#Logistic Regression
+logistic_regression <- glm(default ~ age + employ + income + creddebt + othdebt, family=binomial, data=train)
+logistic_preds <- predict(logistic_regression, newdata=test, type="response")
+compare.test = data.frame(actual=test$default, predicted_probability=logistic_preds, predicted = ifelse(logistic_preds > 0.5, 1, 0))
+pred.test.error <- mean(compare.test$predicted != test$default) 
+log.pred.test<-predict(tree.class.train, newdata=test, type="class")
+table(y.test, log.pred.test)
+fpr_log <- 27/(27+244)
+fnr_log <- 45/(45+34)
+```
+
+```{r, echo=FALSE, warning=FALSE}
+probabilities <- predict(logistic_regression, type = "response")
+
+# Apply new threshold, e.g., 0.3
+threshold <- 0.5
+predicted_classes <- ifelse(probabilities > threshold, 1, 0)
+
+# Create confusion matrix
+confusion_matrix <- table(Predicted = predicted_classes, Actual = y.test)
+confusion_matrix
+```
+
+**Classification Tree (RBS) Matrix**
+
+```{r, echo=FALSE, warning = FALSE}
+set.seed(4630)
+tree.pred.test<-predict(tree.class.train, newdata=test, type="class")
+table(y.test, tree.pred.test)
+error_rate<-(29+46)/(242+46+29+33)
+fpr<-(29)/(29+242)
+fnr<-(46)/(46+33)
+```
+
+**Random Forests Matrix**
+
+```{r, echo = FALSE, warning = FALSE}
+set.seed(4630)
+pred.rf<-predict(rf.class,newdata=test)
+table(y.test,pred.rf)
+
+error_rf<-(28+45)/(243+28+45+34)
+fpr_rf<-28/(243+24)
+fnr_rf<-45/(45+34)
+```
+
+**(b)**
+
+```{r, echo=FALSE, warning = FALSE}
+metrics <- data.frame(
+  Test_Error = c(error_rate, pred.test.error, error_rf),
+  FPR = c(fpr, fpr_log, fpr_rf),
+  FNR = c(fnr, fnr_log, fnr_rf)
+)
+colnames(metrics) <- c("Error Rate", "FPR", "FNR")
+rownames(metrics) <- c("0.5 Threshold RBS", "0.5 Threshold Logistic Regression", "0.5 Threshold RF")
+metrics
+
+```
+
+**(c)**
+
+**Logistic Regression Threshold Commentary**
+
+The logistic regression yields a FNR that is signficantly higher than the FPR so lowering the threshold to approximately 0.4 would equalize them. This may increase the overall error rate, but it would be more balanced and better so that the false negative rate can be decreased which is way worse because it would be detrimental to predict a customer to not default and then they default, making the bank lose more money than the other way around.
+
+**Classification Tree (RBS) Threshold Commentary**
+
+The FNR is significantly higher than the FPR and lowering the threshold to 0.4 would equalize them at ~.285. This, however, would increase the overall error rate but this is worth it as having a high false negative rate means means that we would classify a customer as not having defaulted when they did which is worse for our purposes than classifying a customer as having defaulted when they haven't.
+
+**Random Forests Threshold Commentary**
+
+Just like RBS, the false negative rate is significantly higher than the false positive rate so we decreased the threshold to .3 in order to even things out between FNR and FPR.
+
+**(e)**
+
+```{r, echo=FALSE, warning = FALSE}
+error_rf<-(17+71)/(200+71+17+62)
+
+fpr_rf<-(71)/(71+200)
+
+fnr_rf<-(17)/(17+62)
+
+error_rate<-(24+70)/(195+76+23+56)
+
+fpr<-(76)/(76+195)
+
+fnr<-(23)/(23+56)
+
+# calculated the log regression numbers on the milestone 3 document
+metrics <- data.frame(
+  Test_Error = c(error_rate, 0.2184897, error_rf),
+  FPR = c(fpr, 0.2436279, fpr_rf),
+  FNR = c(fnr, 0.2875843, fnr_rf)
+)
+colnames(metrics) <- c("Error Rate", "FPR", "FNR")
+rownames(metrics) <- c("0.4 Threshold RBS", "0.4 Threshold Logistic Regression", "0.3 Threshold RF")
+metrics
+```
+**(f)**
+
+The models we built show us that, of the predictors we used, there importance ranked from greatest to least is as follows: employ (years of employment) which had a negative correlation to default, creddebt (credit to debt ratio) which had a positive correlation to default, othdebt (other debt) which had a positive correlation to default, income which had a negative correlation to default, and age which had a negative correlation to default.
+
+**(g)**
+
+The logistic regression best answered our question because it had the lowest total error rate. Though, the random forest may be equally as good or arguable better for the question because it yielded the lowest false negative rate (which is crucial as users of this model would rather overshoot in their prediction rather than undershoot) and, as stated above, it found that employ, creddebt, and othdebt were the three most important factors in predicting customers who have defaulted in the past. This result isn't all that suprising as in our EDA we found all the predictors in our data set to be relatively valid factors to consider when predicting default, but it is interesting how age is the least important of the five as generally one would consider years of employment (the most important predictor) to be closely correlated to age.
+
+# 6.5 Address Previous Comments 
+
+We have successfully addressed the comments from previous milestones regarding the classification question.
+
+# Part 7: Further Work
+If more time was available, the project could have been extended to also include more features by researching other variables that could be indicative of a customer's income or their likelihood of defaulting. Another aspect that would have been interesting to dive into is clustering. Clustering of customers could be used to compare and especially visually depict customers who are similar in certain features that may make them more likely to default. This method would be visually appealing and makes sense due to the variety of numerical variables used and when thinking about the way people behave, it makes sense because in general, humans follow patterns of behaviors. For instance, people who are not organized with their finances and bills are generally more susceptible to defaulting due to their lack of organization. Clustering can help group behaviors like those to create predictions for income as well as likelihood of defaulting. Additionally, with more time, some tuning of hyperparameters would be a decent strategy to use to improve the models.
+
+# Part 8: Reflection on Learning
+
+This project helps on learning, firstly by providing a practical application of the statistical and analytical concepts learned in class. By working on real data sets, we were able to apply our understanding of variables, data analysis, and graphical representation in a tangible way. The project connected classroom learning with real-world applications. By analyzing a dataset related to credit risk analysis for extending bank loans, we see the practical implications and applications of our learning, making the concepts more relevant and engaging. Additionally, the group project required managing time effectively and taking responsibility for individual contributions to meet deadlines. This aspect of the project mirrors real-world scenarios where time management and accountability are essential. Also, the project necessitated working as a group, which allowed for the exchange of ideas and collaborative problem-solving. This interaction led to a better understanding of concepts as we learn from each other's perspectives and approaches.
+
+
+
+
